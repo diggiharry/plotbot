@@ -33,7 +33,7 @@ class Movement {
 
 	virtual float calcdtx();
 	virtual float calcdty();
-	virtual bool finished(float x_pos, float y_pos);	
+	virtual bool at_target(float x_pos, float y_pos);	
 
 	void init(float t);
 	
@@ -48,36 +48,18 @@ class Movement {
 	Vec dt;
 	Vec dir;
 
-	int id;
-
 };
 
 /**
-    Class for constant velocity movement in one direction, derived from Movement
+    Class for linear movement in one direction, derived from Movement
 */
-class CruiseMovement : public Movement {
+class LinearMovement : public Movement {
 
 	public:
 
-	CruiseMovement();
-	CruiseMovement(Movement *move, Vec steps);
-	CruiseMovement(Vec start, Vec steps, float v);
-
-	virtual float calcdtx();
-	virtual float calcdty();
-	virtual bool finished(float x_pos, float y_pos);	
-};
-
-/**
-    Class for accelerated/deccelerated movement in one direction, derived from Movement
-*/
-class AccelMovement : public Movement {
-
-	public:
-
-	AccelMovement();
-	AccelMovement(Movement *move, float acc_time, Vec steps, float stopv);
-	AccelMovement(Vec start, float acc_time, Vec steps, float startv, float stopv);
+	LinearMovement();
+	LinearMovement(Movement *move, float acc_time, Vec steps, float stopv);
+	LinearMovement(Vec start, float acc_time, Vec steps, float startv, float stopv);
 	
 	static float calc_v_primitive(float t,float acc_time, float startv, float stopv);
 	static float calc_steps2acc(float acc_time, float startv, float stopv);
@@ -86,9 +68,33 @@ class AccelMovement : public Movement {
 
 	virtual float calcdtx();
 	virtual float calcdty();
-	virtual bool finished(float x_pos, float y_pos);	
+	virtual bool at_target(float x_pos, float y_pos);	
 
 	float acc_time;
+
+};
+
+/**
+    Class for circular movement, derived from AccelMovement
+*/
+class CircularMovement : public LinearMovement {
+
+	public:
+
+	CircularMovement();
+	CircularMovement(Movement *move, float acc_time, Vec stop, float stopv, float r);
+	CircularMovement(Vec start, float acc_time, Vec stop, float startv, float stopv, float r);
+
+
+	float calc_angle(Vec pos);
+	float calc_v(float t);
+
+
+	virtual float calcdtx();
+	virtual float calcdty();
+	virtual bool at_target(float x_pos, float y_pos);
+
+	float r;
 
 };
 

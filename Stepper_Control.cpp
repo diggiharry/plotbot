@@ -33,13 +33,13 @@ void Stepper_Control::linear_move(int steps_top, int steps_bottom) {
 	float stopv = V_MAX;		
 	float startv = V_MIN;
 	float acc_time = ACCTIME;	
-	float steps2acc = AccelMovement::calc_steps2acc(acc_time, startv, stopv);
+	float steps2acc = LinearMovement::calc_steps2acc(acc_time, startv, stopv);
 	//Serial.print("steps2acc: ");
 	//Serial.println(steps2acc);
 
-	AccelMovement *acc;
-	CruiseMovement *cruise;
-	AccelMovement *decc;
+	LinearMovement *acc;
+	LinearMovement *cruise;
+	LinearMovement *decc;
 
 	Vec dir = stop - start;
 	dir.normalise_max();	
@@ -56,16 +56,11 @@ void Stepper_Control::linear_move(int steps_top, int steps_bottom) {
 
 	Vec acc_steps = Vec(steps2acc*dir.x, steps2acc*dir.y);
 
-	acc = new AccelMovement(start, acc_time, acc_steps, startv, stopv);
-	cruise = new CruiseMovement(acc, steps-acc_steps-acc_steps);
-	decc = new AccelMovement(cruise, acc_time, acc_steps, startv);
-
-	count++;
-	acc->id = count;
-	count++;
-	cruise->id = count;
-	count++;
-	decc->id = count;
+	acc = new LinearMovement(start, acc_time, acc_steps, startv, stopv);
+	//cruise = new LinearMovement(acc, 0.0, steps-acc_steps-acc_steps, stopv);
+	cruise = new LinearMovement(start+acc_steps, 0.0, steps-acc_steps-acc_steps, stopv, stopv);
+	//decc = new LinearMovement(cruise, acc_time, acc_steps, startv);
+	decc = new LinearMovement(stop-acc_steps, acc_time, acc_steps, stopv, startv);
 
 	moves.push(acc);
 	moves.push(cruise);
@@ -106,8 +101,8 @@ void Stepper_Control::cruise(int steps_top, int steps_bottom) {
 
 	Vec steps = Vec(float(steps_top), float(steps_bottom));
 
-	CruiseMovement *cruise;
-	cruise = new CruiseMovement(start, steps, v);
+	LinearMovement *cruise;
+	cruise = new LinearMovement(start, 0.0, steps, v, v);
 
 	moves.push(cruise);
 	check_move();
@@ -116,9 +111,10 @@ void Stepper_Control::cruise(int steps_top, int steps_bottom) {
 void Stepper_Control::x_callback() {
 	float x_pos = 	float(this->top->get_pos());
 	float y_pos = 	float(this->bottom->get_pos());
-	if (!move->finished(x_pos, y_pos)) {
+	if (!move->at_target(x_pos, y_pos)) {
 		if (move->dir.x > 0.0) top->step();
 		PITimer1.period(move->calcdtx());
+		//Serial.println( (move->dt.x-move->t0)*1000 );
 	} else {
 		check_move();
 	}
@@ -127,7 +123,7 @@ void Stepper_Control::x_callback() {
 void Stepper_Control::y_callback() {
 	float x_pos = 	float(this->top->get_pos());
 	float y_pos = 	float(this->bottom->get_pos());
-	if (!move->finished(x_pos, y_pos)) {
+	if (!move->at_target(x_pos, y_pos)) {
 		if (move->dir.y > 0.0) bottom->step();
 		PITimer2.period(move->calcdty());
 	} else {
@@ -137,6 +133,7 @@ void Stepper_Control::y_callback() {
 
 inline void Stepper_Control::check_move() {
 	if (moves.size() > 0) {
+		//Serial.println("checked");
 		Movement *next = moves.pop();			
 		move = next;
 		float t = mus/1000000.0;

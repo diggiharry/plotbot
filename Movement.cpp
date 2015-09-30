@@ -36,7 +36,7 @@ Movement::Movement() {
     @param actual positions of x and y steppers 
     @return true if movement is finished, else fals
 */
-bool Movement::finished(float x_pos, float y_pos) {
+bool Movement::at_target(float x_pos, float y_pos) {
 	return true;
 }
 
@@ -72,75 +72,6 @@ void Movement::init(float t) {
 };
 
 
-
-/**
-    Constructor of CruiseMovement
-	
-	@param start Starting point of movement
-	@param steps Steps to ending point
-	@param v velocity
-*/
-CruiseMovement::CruiseMovement(Vec start, Vec steps, float v): Movement() {
-	this->start = start;
-	this->stop = start+steps; // set ending position to start + steps
-	this->stopv = v;
-	this->startv = v;
-	this->dir = this->stop - this->start; // direction of movement is difference of start and stop vector
-	this->dir.normalise_max(); // normalise direction	
-};
-
-/**
-    Constructor of CruiseMovement
-	
-	@param move movement to which append to
-	@param steps Steps to ending point
-*/
-CruiseMovement::CruiseMovement(Movement *move, Vec steps): Movement() {
-	this->start = move->stop; // start of this movement is stop of last movement
-	this->stop = start + steps;
-	this->stopv = move->stopv;
-	this->startv = move->stopv;
-	this->dir = move->dir;
-}
-
-/**
-    Checks if CruiseMovement is finished
-
-    @param actual positions of x and y steppers 
-    @return true if movement is finished, else fals
-*/
-bool CruiseMovement::finished(float x_pos, float y_pos) {
-	if ((x_pos >= stop.x) & (y_pos >= stop.y)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
-/**
-    Return delay in seconds until the next step should be made
-	Saves absolute time of next step in dt.x
-
-    @return time until next step in x-direction
-*/
-float CruiseMovement::calcdtx() {
-	float d_t = 1.0/this->stopv; // calculate delay for next step [s/step] from velocity [steps/s]
-	d_t = d_t/this->dir.x; // apply direction vector to delay time
-	return d_t;
-}
-
-/**
-    Return delay in seconds until the next step should be made
-	Saves absolute time of next step in dt.y
-
-    @return time until next step in y-direction
-*/
-float CruiseMovement::calcdty() {
-	float d_t = 1.0/this->stopv; // calculate delay for next step [s/step] from velocity [steps/s]
-	d_t = d_t/this->dir.y; // apply direction vector to delay time
-	return d_t;
-}
-
 /**
     Constructor of AccelMovement
 	
@@ -150,7 +81,7 @@ float CruiseMovement::calcdty() {
 	@param stopv starting velocity
 	@param stopv final velocity
 */
-AccelMovement::AccelMovement(Vec start, float acc_time, Vec steps, float startv, float stopv): Movement() {
+LinearMovement::LinearMovement(Vec start, float acc_time, Vec steps, float startv, float stopv): Movement() {
 	this->start = start;
 	this->stop = start+steps;
 	this->acc_time = acc_time;
@@ -168,7 +99,7 @@ AccelMovement::AccelMovement(Vec start, float acc_time, Vec steps, float startv,
 	@param steps Steps to ending point
 	@param stopv final velocity
 */
-AccelMovement::AccelMovement(Movement *move, float acc_time, Vec steps, float stopv): Movement() {
+LinearMovement::LinearMovement(Movement *move, float acc_time, Vec steps, float stopv): Movement() {
 	this->start = move->stop;
 	this->stop = start + steps;
 	this->acc_time = acc_time;
@@ -183,7 +114,7 @@ AccelMovement::AccelMovement(Movement *move, float acc_time, Vec steps, float st
     @param actual positions of x and y steppers 
     @return true if movement is finished, else fals
 */
-bool AccelMovement::finished(float x_pos, float y_pos) {
+bool LinearMovement::at_target(float x_pos, float y_pos) {
 	if ((x_pos >= stop.x) & (y_pos >= stop.y)) {
 		return true;
 	} else {
@@ -198,7 +129,7 @@ bool AccelMovement::finished(float x_pos, float y_pos) {
     @param acc_time how long the acceleration shall take, in seconds
     @return number between 0.0 and 1.0 following 1/4 of a sinusoid
 */
-float AccelMovement::calc_factor(float dt, float acc_time) {
+float LinearMovement::calc_factor(float dt, float acc_time) {
 	// calculate sinusoidal profile
 	if (dt < acc_time) {
 		return (0.5-0.5*cos((1.0/acc_time)*PI*dt));
@@ -217,7 +148,10 @@ float AccelMovement::calc_factor(float dt, float acc_time) {
     @param t actual time of movement in seconds, global time 
     @return velocity in steps/s
 */
-float AccelMovement::calc_v(float t) {
+float LinearMovement::calc_v(float t) {
+	// No acceleration needed if startv ~= stopv
+	if ( abs(stopv - startv) < 0.00001 ) return startv;
+
 	// if actual time is earlier than start time, return start velocity
 	if (t < this->t0) return this->startv;	
 
@@ -243,7 +177,7 @@ float AccelMovement::calc_v(float t) {
 	@param stopv final velocity
     @return steps needed to perform acceleration until time t
 */
-float AccelMovement::calc_v_primitive(float t,float acc_time, float startv, float stopv) {
+float LinearMovement::calc_v_primitive(float t,float acc_time, float startv, float stopv) {
 	float diff_v = abs(stopv - startv);
 	return (startv + 0.5*diff_v)*t - 0.159155*acc_time*diff_v*sin((PI*t)/acc_time);
 }
@@ -257,7 +191,7 @@ float AccelMovement::calc_v_primitive(float t,float acc_time, float startv, floa
 	@param stopv final velocity
     @return steps needed to complete acceleration
 */
-float AccelMovement::calc_steps2acc(float acc_time, float startv, float stopv) {
+float LinearMovement::calc_steps2acc(float acc_time, float startv, float stopv) {
 	return (calc_v_primitive(acc_time, acc_time, startv, stopv) - calc_v_primitive(0.0, acc_time, startv, stopv));///1.333;
 }
 
@@ -267,7 +201,7 @@ float AccelMovement::calc_steps2acc(float acc_time, float startv, float stopv) {
 
     @return time until next step in x-direction
 */
-float AccelMovement::calcdtx() {
+float LinearMovement::calcdtx() {
 	float d_t = 1.0/calc_v(dt.x);
 	d_t = d_t/dir.x;	
 	dt.x += d_t;
@@ -280,7 +214,7 @@ float AccelMovement::calcdtx() {
 
     @return time until next step in y-direction
 */
-float AccelMovement::calcdty() {
+float LinearMovement::calcdty() {
 	float d_t = 1.0/calc_v(dt.y);
 	d_t = d_t/dir.y;	
 	dt.y += d_t;
